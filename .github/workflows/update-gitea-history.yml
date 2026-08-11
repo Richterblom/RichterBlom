@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
   schedule:
-    - cron: "0 22 * * *"
+    - cron: "59 21 * * 5"
 
 permissions:
   contents: write
@@ -27,7 +27,7 @@ jobs:
           GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: node scripts/update-gitea-history.mjs
 
-      - name: Generate contribution heatmap
+      - name: Generate contribution heatmaps
         run: node scripts/generate-heatmap.mjs
 
       - name: Commit updated history
@@ -35,7 +35,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/gitea-history.json assets/professional-contributions.svg 
+          git add data/gitea-history.json assets/
 
           if git diff --cached --quiet; then
             echo "No contribution changes."
