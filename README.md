@@ -1,4 +1,4 @@
-##  Git Contribution History From August 2025 Onwards
+##  Git Contribution History From August 2025 Onwards 
 
 ### 2026
 
@@ -10,3 +10,4 @@
 
 > Contribution counts and dates only. No source code, repository names,
 > commit messages, branches, or other company data are stored.
+> (Tired of losing it)
