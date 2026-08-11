@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const ROOT = process.cwd();
 const historyPath = path.join(ROOT, 'data', 'gitea-history.json');
-const outputPath = path.join(ROOT, 'assets', 'professional-contributions.svg');
+const assetsPath = path.join(ROOT, 'assets');
 
 const history = JSON.parse(
     fs.readFileSync(historyPath, 'utf8').replace(/^\uFEFF/, '')
@@ -20,8 +20,23 @@ if (entries.length === 0) {
     throw new Error('No contribution history found.');
 }
 
-const firstDate = new Date(`${entries[0].date}T00:00:00Z`);
-const lastDate = new Date(`${entries.at(-1).date}T00:00:00Z`);
+fs.mkdirSync(assetsPath, {recursive: true});
+
+const groupedByYear = new Map();
+
+for (const entry of entries) {
+    const year = entry.date.slice(0, 4);
+
+    if (!groupedByYear.has(year)) {
+        groupedByYear.set(year, []);
+    }
+
+    groupedByYear.get(year).push(entry);
+}
+
+function dateKey(date) {
+    return date.toISOString().slice(0, 10);
+}
 
 function startOfWeek(date) {
     const d = new Date(date);
@@ -35,110 +50,141 @@ function endOfWeek(date) {
     return d;
 }
 
-const start = startOfWeek(firstDate);
-const end = endOfWeek(lastDate);
+function generateYearHeatmap(year, yearEntries) {
+    const contributionMap = new Map(
+        yearEntries.map(entry => [entry.date, entry.count])
+    );
 
-const contributionMap = new Map(entries.map(x => [x.date, x.count]));
+    const yearStart = new Date(`${year}-01-01T00:00:00Z`);
+    const yearEnd = new Date(`${year}-12-31T00:00:00Z`);
 
-const allDays = [];
+    const start = startOfWeek(yearStart);
+    const end = endOfWeek(yearEnd);
 
-for (
-    let d = new Date(start);
-    d <= end;
-    d.setUTCDate(d.getUTCDate() + 1)
-) {
-    const date = d.toISOString().slice(0, 10);
+    const days = [];
 
-    allDays.push({
-        date,
-        count: contributionMap.get(date) ?? 0,
-        weekday: d.getUTCDay()
-    });
-}
+    for (
+        let d = new Date(start);
+        d <= end;
+        d.setUTCDate(d.getUTCDate() + 1)
+    ) {
+        const date = dateKey(d);
 
-const maxCount = Math.max(...entries.map(x => x.count), 1);
-
-function level(count) {
-    if (count === 0) return 0;
-
-    const ratio = count / maxCount;
-
-    if (ratio <= 0.25) return 1;
-    if (ratio <= 0.50) return 2;
-    if (ratio <= 0.75) return 3;
-
-    return 4;
-}
-
-const cell = 11;
-const gap = 3;
-const step = cell + gap;
-
-const left = 38;
-const top = 42;
-const bottom = 42;
-
-const weekCount = Math.ceil(allDays.length / 7);
-
-const width = left + weekCount * step + 20;
-const height = top + 7 * step + bottom;
-
-const monthLabels = [];
-let previousMonth = -1;
-
-for (let week = 0; week < weekCount; week++) {
-    const day = allDays[week * 7];
-
-    if (!day) continue;
-
-    const date = new Date(`${day.date}T00:00:00Z`);
-    const month = date.getUTCMonth();
-
-    if (month !== previousMonth) {
-        monthLabels.push({
-            x: left + week * step,
-            label: date.toLocaleString('en-US', {
-                month: 'short',
-                timeZone: 'UTC'
-            })
+        days.push({
+            date,
+            count: contributionMap.get(date) ?? 0,
+            weekday: d.getUTCDay(),
+            inYear: d.getUTCFullYear().toString() === year
         });
-
-        previousMonth = month;
     }
-}
 
-const rects = allDays.map((day, index) => {
-    const week = Math.floor(index / 7);
-    const x = left + week * step;
-    const y = top + day.weekday * step;
-    const contributionLevel = level(day.count);
+    const positiveCounts = yearEntries
+        .map(entry => entry.count)
+        .filter(count => count > 0)
+        .sort((a, b) => a - b);
 
-    return `
-    <rect
-      x="${x}"
-      y="${y}"
-      width="${cell}"
-      height="${cell}"
-      rx="2"
-      class="level-${contributionLevel}"
-    >
-      <title>${day.date}: ${day.count} contribution${day.count === 1 ? '' : 's'}</title>
-    </rect>
-  `;
-}).join('');
+    function level(count) {
+        if (count <= 0) return 0;
 
-const months = monthLabels.map(month => `
-  <text x="${month.x}" y="22" class="month">${month.label}</text>
-`).join('');
+        if (positiveCounts.length === 0) {
+            return 0;
+        }
 
-const totalContributions = entries.reduce(
-    (sum, entry) => sum + entry.count,
-    0
-);
+        const max = positiveCounts.at(-1);
 
-const activeDays = entries.filter(entry => entry.count > 0).length;
+        if (max <= 4) {
+            return Math.min(count, 4);
+        }
 
-const svg = `
+        const ratio = count / max;
+
+        if (ratio <= 0.25) return 1;
+        if (ratio <= 0.50) return 2;
+        if (ratio <= 0.75) return 3;
+
+        return 4;
+    }
+
+    const cell = 11;
+    const gap = 3;
+    const step = cell + gap;
+
+    const left = 36;
+    const top = 34;
+    const bottom = 42;
+
+    const weekCount = Math.ceil(days.length / 7);
+
+    const width = left + weekCount * step + 20;
+    const height = top + 7 * step + bottom;
+
+    const monthLabels = [];
+    let previousMonth = -1;
+
+    for (let week = 0; week < weekCount; week++) {
+        const weekDays = days.slice(week * 7, week * 7 + 7);
+
+        const firstInYear = weekDays.find(day => day.inYear);
+
+        if (!firstInYear) {
+            continue;
+        }
+
+        const date = new Date(`${firstInYear.date}T00:00:00Z`);
+        const month = date.getUTCMonth();
+
+        if (month !== previousMonth) {
+            monthLabels.push({
+                x: left + week * step,
+                label: date.toLocaleString('en-US', {
+                    month: 'short',
+                    timeZone: 'UTC'
+                })
+            });
+
+            previousMonth = month;
+        }
+    }
+
+    const rects = days.map((day, index) => {
+        const week = Math.floor(index / 7);
+        const x = left + week * step;
+        const y = top + day.weekday * step;
+
+        if (!day.inYear) {
+            return '';
+        }
+
+        const contributionLevel = level(day.count);
+
+        return `
+      <rect
+        x="${x}"
+        y="${y}"
+        width="${cell}"
+        height="${cell}"
+        rx="2"
+        class="level-${contributionLevel}"
+      >
+        <title>${day.date}: ${day.count} contribution${day.count === 1 ? '' : 's'}</title>
+      </rect>
+    `;
+    }).join('');
+
+    const months = monthLabels.map(month => `
+    <text x="${month.x}" y="18" class="month">${month.label}</text>
+  `).join('');
+
+    const totalContributions = yearEntries.reduce(
+        (sum, entry) => sum + entry.count,
+        0
+    );
+
+    const activeDays = yearEntries.filter(
+        entry => entry.count > 0
+    ).length;
+
+    const svg = `
 <svg
   xmlns="http://www.w3.org/2000/svg"
   width="${width}"
@@ -147,10 +193,10 @@ const svg = `
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Professional Git contribution history</title>
+  <title id="title">${year} professional Git contribution history</title>
+
   <desc id="desc">
-    Professional contribution activity archived from Gitea,
-    beginning ${entries[0].date}.
+    Professional Git contribution activity archived for ${year}.
   </desc>
 
   <style>
@@ -173,7 +219,9 @@ const svg = `
     .level-4 { fill: #216e39; }
 
     @media (prefers-color-scheme: dark) {
-      text { fill: #8c959f; }
+      text {
+        fill: #8c959f;
+      }
 
       .level-0 { fill: #161b22; }
       .level-1 { fill: #0e4429; }
@@ -192,19 +240,27 @@ const svg = `
   ${rects}
 
   <text x="${left}" y="${height - 12}">
-    ${totalContributions} contributions · ${activeDays} active days · archived since ${entries[0].date}
+    ${totalContributions} contributions · ${activeDays} active days
   </text>
 </svg>
 `.trim();
 
-fs.mkdirSync(path.dirname(outputPath), {
-    recursive: true
-});
+    const outputPath = path.join(
+        assetsPath,
+        `professional-contributions-${year}.svg`
+    );
 
-fs.writeFileSync(outputPath, svg);
+    fs.writeFileSync(outputPath, svg);
 
-console.log(`Generated ${outputPath}`);
-console.log(`From: ${entries[0].date}`);
-console.log(`To:   ${entries.at(-1).date}`);
-console.log(`Contributions: ${totalContributions}`);
-console.log(`Active days: ${activeDays}`);
+    console.log(
+        `${year}: ${totalContributions} contributions across ${activeDays} active days`
+    );
+}
+
+for (const [year, yearEntries] of groupedByYear) {
+    generateYearHeatmap(year, yearEntries);
+}
+
+console.log(
+    `Generated ${groupedByYear.size} yearly heatmap(s).`
+);
