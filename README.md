@@ -1,11 +1,12 @@
-# Professional Git Contribution History from AUG 2025
+##  Git Contribution History From August 2025 Onwards
 
-Permanent archive and visualization of my professional Git contribution activity.
+### 2026
 
-This archive preserves contribution history from my work on Gitea (tired of losing it).
+![2026 Professional Git Contributions](./assets/professional-contributions-2026.svg)
 
-![Professional Git Contribution History](./assets/professional-contributions.svg)
+### 2025
 
+![2025 Professional Git Contributions](./assets/professional-contributions-2025.svg)
 
-> This archive contains contribution counts and dates only. No source code,
-> repository names, commit messages, branches, or other company data are stored.
+> Contribution counts and dates only. No source code, repository names,
+> commit messages, branches, or other company data are stored.
