@@ -7,7 +7,7 @@ on:
     - cron: "59 21 * * 5"
 
 concurrency:
-  group: gitea-history-update
+  group: profile-main-write
   cancel-in-progress: false
 
 permissions:
@@ -50,5 +50,20 @@ jobs:
 
           git commit -m "Update Gitea contribution history"
 
-          git pull --rebase origin main
-          git push origin main
+          for attempt in 1 2 3 4 5; do
+            echo "Push attempt $attempt..."
+
+            git fetch origin
+            git rebase origin/main
+
+            if git push origin HEAD:main; then
+              echo "Push successful."
+              exit 0
+            fi
+
+            echo "Remote changed during push. Retrying..."
+            sleep 2
+          done
+
+          echo "Failed to push after 5 attempts."
+          exit 1
